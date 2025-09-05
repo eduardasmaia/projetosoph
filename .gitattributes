@@ -1,2 +1,390 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caça-Palavras Personalizado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <!-- Mensagem de feedback -->
+    <div id="message-box" class="fixed top-5 left-1/2 -translate-x-1/2 bg-blue-500 text-white py-2 px-4 rounded-lg shadow-xl z-50 transform transition-transform duration-300 scale-0">
+        Palavra encontrada!
+    </div>
+
+    <!-- Tela Inicial -->
+    <div id="home-screen" class="flex flex-col items-center min-h-screen justify-between p-6 md:p-10 w-full max-w-2xl text-center">
+        <!-- Conteúdo principal centralizado -->
+        <div class="flex flex-col items-center justify-center mt-auto">
+            <h1 class="text-5xl md:text-6xl font-bold text-gray-800 mb-4">Caça-Palavras</h1>
+            <p class="text-xl md:text-2xl text-gray-600 mb-8 italic">Um jogo para sua mente e bem-estar.</p>
+            <button id="start-game-btn" class="px-8 py-4 bg-blue-600 text-white font-semibold rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-300 transform hover:scale-105 text-xl md:text-2xl">
+                Começar
+            </button>
+        </div>
+
+        <!-- Frase no final da página -->
+        <p class="text-xl md:text-2xl text-gray-600 mt-auto pt-10">a maia espera que você se divirta</p>
+    </div>
+
+    <!-- Tela do Jogo -->
+    <div id="game-screen" class="bg-white rounded-3xl shadow-2xl p-6 md:p-10 w-full max-w-4xl flex flex-col items-center hidden">
+        <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-2 text-center">Caça-Palavras</h1>
+        <p class="text-xl md:text-2xl text-gray-600 mb-2 text-center italic">O que o maia disse...</p>
+        <p id="dynamic-subtitle" class="text-lg md:text-xl text-gray-500 mb-6 text-center italic">Encontre a frase oculta na grade!</p>
+
+        <!-- Container da grade e da lista de palavras -->
+        <div class="flex flex-col md:flex-row items-center md:items-start w-full gap-8">
+            <!-- Grid do Jogo -->
+            <div id="word-search-grid" class="flex-grow grid bg-gray-200 border-4 border-blue-500 rounded-lg overflow-hidden select-none touch-none aspect-square w-full max-w-[300px] md:max-w-[400px]">
+                <!-- Células do jogo serão geradas aqui pelo JS -->
+            </div>
+
+            <!-- Lista de Palavras -->
+            <div class="w-full md:w-1/3 p-4 bg-gray-50 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4 text-center">Palavras</h2>
+                <ul id="word-list" class="space-y-2 text-center">
+                    <!-- Palavras serão adicionadas pelo JS -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- Botão de Novo Jogo -->
+        <button id="new-game-btn" class="mt-8 px-6 py-3 bg-blue-600 text-white font-semibold rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-300 transform hover:scale-105">
+            Novo Jogo
+        </button>
+    </div>
+
+    <!-- Modal de Vitória -->
+    <div id="win-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-8 text-center max-w-sm w-full">
+            <h2 class="text-4xl font-bold text-gray-800 mb-4">Parabéns!</h2>
+            <p class="text-lg text-gray-600 mb-6">Você encontrou todas as palavras!</p>
+            <button id="play-again-btn" class="px-8 py-4 bg-blue-600 text-white font-semibold rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-300 transform hover:scale-105 text-xl">
+                Jogar Novamente
+            </button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const grid = document.getElementById('word-search-grid');
+            const wordListUl = document.getElementById('word-list');
+            const newGameBtn = document.getElementById('new-game-btn');
+            const messageBox = document.getElementById('message-box');
+            
+            // Elementos da tela inicial
+            const homeScreen = document.getElementById('home-screen');
+            const gameScreen = document.getElementById('game-screen');
+            const startGameBtn = document.getElementById('start-game-btn');
+
+            // Elementos do modal de vitória
+            const winModal = document.getElementById('win-modal');
+            const playAgainBtn = document.getElementById('play-again-btn');
+
+            let words = [];
+            let gameGrid = [];
+            let selectedCells = [];
+            let isSelecting = false;
+
+            // Define o tamanho da grade fixo para 7x7
+            const gridSize = 7;
+
+            // Função para mostrar mensagens temporárias
+            function showMessage(text) {
+                messageBox.textContent = text;
+                messageBox.classList.remove('scale-0');
+                messageBox.classList.add('scale-100');
+                setTimeout(() => {
+                    messageBox.classList.remove('scale-100');
+                    messageBox.classList.add('scale-0');
+                }, 2000);
+            }
+
+            // Inicia um novo jogo com as palavras específicas
+            function initializeGame() {
+                // Esconde o modal de vitória se estiver visível
+                winModal.classList.add('hidden');
+                
+                // Palavras para a frase "seu sorriso é lindo"
+                words = ['SEU', 'SORRISO', 'ÉLINDO'];
+                
+                gameGrid = Array(gridSize).fill(null).map(() => Array(gridSize).fill(''));
+                grid.innerHTML = '';
+                wordListUl.innerHTML = '';
+
+                // Define as colunas do grid
+                grid.style.gridTemplateColumns = `repeat(${gridSize}, minmax(0, 1fr))`;
+
+                // Posiciona as palavras no grid
+                words.forEach(word => placeWord(word));
+
+                // Preenche as células vazias
+                fillEmptyCells();
+
+                // Renderiza o tabuleiro
+                gameGrid.forEach((row, rowIndex) => {
+                    row.forEach((cell, colIndex) => {
+                        const div = document.createElement('div');
+                        div.classList.add('flex', 'items-center', 'justify-center', 'font-bold', 'text-gray-700', 'border-2', 'border-gray-300', 'cursor-pointer', 'rounded-md', 'm-0.5', 'transition-all', 'duration-150', 'bg-white', 'text-lg', 'md:text-2xl');
+                        div.textContent = cell;
+                        div.dataset.row = rowIndex;
+                        div.dataset.col = colIndex;
+                        grid.appendChild(div);
+                    });
+                });
+                
+                // Cria a lista de palavras
+                words.forEach(word => {
+                    const li = document.createElement('li');
+                    li.classList.add('text-lg', 'text-gray-600', 'p-2', 'rounded-md', 'transition-all', 'duration-300');
+                    li.textContent = word;
+                    li.dataset.word = word;
+                    wordListUl.appendChild(li);
+                });
+            }
+
+            // Tenta colocar uma palavra no grid
+            function placeWord(word) {
+                // Direções horizontal, vertical e diagonal
+                const directions = [
+                    {dr: 0, dc: 1}, // Horizontal
+                    {dr: 1, dc: 0}, // Vertical
+                    {dr: 1, dc: 1}, // Diagonal (para baixo-direita)
+                    {dr: 1, dc: -1}, // Diagonal (para baixo-esquerda)
+                    {dr: 0, dc: -1}, // Horizontal (reverso)
+                    {dr: -1, dc: 0}, // Vertical (reverso)
+                    {dr: -1, dc: -1}, // Diagonal (para cima-esquerda)
+                    {dr: -1, dc: 1} // Diagonal (para cima-direita)
+                ];
+
+                const possiblePositions = [];
+                for (let r = 0; r < gridSize; r++) {
+                    for (let c = 0; c < gridSize; c++) {
+                        for (const direction of directions) {
+                            let fits = true;
+                            for (let i = 0; i < word.length; i++) {
+                                const newRow = r + i * direction.dr;
+                                const newCol = c + i * direction.dc;
+
+                                if (newRow >= gridSize || newCol >= gridSize || newRow < 0 || newCol < 0) {
+                                    fits = false;
+                                    break;
+                                }
+                                if (gameGrid[newRow][newCol] !== '' && gameGrid[newRow][newCol] !== word[i]) {
+                                    fits = false;
+                                    break;
+                                }
+                            }
+                            if (fits) {
+                                possiblePositions.push({ r, c, direction });
+                            }
+                        }
+                    }
+                }
+                
+                if (possiblePositions.length > 0) {
+                    const chosenPosition = possiblePositions[Math.floor(Math.random() * possiblePositions.length)];
+                    const { r, c, direction } = chosenPosition;
+                    for (let i = 0; i < word.length; i++) {
+                        const newRow = r + i * direction.dr;
+                        const newCol = c + i * direction.dc;
+                        gameGrid[newRow][newCol] = word[i];
+                    }
+                }
+            }
+
+            // Preenche as células vazias com letras aleatórias
+            function fillEmptyCells() {
+                const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                for (let r = 0; r < gridSize; r++) {
+                    for (let c = 0; c < gridSize; c++) {
+                        if (gameGrid[r][c] === '') {
+                            gameGrid[r][c] = alphabet[Math.floor(Math.random() * alphabet.length)];
+                        }
+                    }
+                }
+            }
+
+            // Limpa a seleção
+            function clearSelection() {
+                selectedCells.forEach(cell => {
+                    cell.classList.remove('bg-blue-300', 'scale-105');
+                    cell.classList.remove('border-blue-700');
+                });
+                selectedCells = [];
+            }
+
+            // Verifica se a palavra selecionada é válida
+            function checkSelection() {
+                if (selectedCells.length < 2) {
+                    clearSelection();
+                    return;
+                }
+
+                const selectedWord = selectedCells.map(cell => cell.textContent).join('');
+                const reversedWord = selectedCells.slice().reverse().map(cell => cell.textContent).join('');
+                
+                if (words.includes(selectedWord)) {
+                    markAsFound(selectedWord);
+                } else if (words.includes(reversedWord)) {
+                    markAsFound(reversedWord);
+                } else {
+                    clearSelection();
+                }
+            }
+
+            // Marca a palavra como encontrada
+            function markAsFound(word) {
+                selectedCells.forEach(cell => {
+                    cell.classList.remove('bg-blue-300', 'scale-105', 'border-blue-700');
+                    cell.classList.add('bg-green-500', 'text-white', 'border-green-700');
+                    cell.style.pointerEvents = 'none'; // Desativa cliques na palavra encontrada
+                });
+
+                const listItem = wordListUl.querySelector(`[data-word="${word}"]`);
+                if (listItem) {
+                    listItem.classList.add('line-through', 'text-green-600', 'italic', 'opacity-70');
+                }
+
+                showMessage('Palavra encontrada!');
+                clearSelection();
+
+                // Verifica se todas as palavras foram encontradas
+                const allFound = words.every(w => {
+                    const li = wordListUl.querySelector(`[data-word="${w}"]`);
+                    return li && li.classList.contains('line-through');
+                });
+
+                if (allFound) {
+                    setTimeout(() => {
+                        winModal.classList.remove('hidden');
+                    }, 500);
+                }
+            }
+
+            // Eventos do mouse para seleção
+            grid.addEventListener('mousedown', (e) => {
+                if (e.target.classList.contains('bg-white')) {
+                    isSelecting = true;
+                    clearSelection();
+                    const cell = e.target;
+                    cell.classList.add('bg-blue-300', 'scale-105', 'border-blue-700');
+                    selectedCells.push(cell);
+                }
+            });
+
+            grid.addEventListener('mouseover', (e) => {
+                if (isSelecting && e.target.classList.contains('bg-white')) {
+                    const newCell = e.target;
+                    const lastCell = selectedCells[selectedCells.length - 1];
+
+                    if (newCell === lastCell) return;
+
+                    // Lógica para permitir seleção linear (horizontal, vertical, diagonal)
+                    const start = {row: parseInt(selectedCells[0].dataset.row), col: parseInt(selectedCells[0].dataset.col)};
+                    const current = {row: parseInt(newCell.dataset.row), col: parseInt(newCell.dataset.col)};
+                    
+                    const dr = Math.sign(current.row - start.row);
+                    const dc = Math.sign(current.col - start.col);
+
+                    if (selectedCells.length > 1) {
+                        const last = {row: parseInt(lastCell.dataset.row), col: parseInt(lastCell.dataset.col)};
+                        const drLast = Math.sign(last.row - start.row);
+                        const dcLast = Math.sign(last.col - start.col);
+                        if (dr !== drLast || dc !== dcLast) return;
+                    }
+                    
+                    if ((dr === 0 && dc !== 0) || (dr !== 0 && dc === 0) || (Math.abs(dr) === 1 && Math.abs(dc) === 1)) {
+                        newCell.classList.add('bg-blue-300', 'scale-105', 'border-blue-700');
+                        if (!selectedCells.includes(newCell)) {
+                            selectedCells.push(newCell);
+                        }
+                    }
+                }
+            });
+
+            grid.addEventListener('mouseup', () => {
+                isSelecting = false;
+                checkSelection();
+            });
+
+            // Adiciona listener para tocar
+            grid.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const cell = e.target.closest('.bg-white');
+                if (cell) {
+                    isSelecting = true;
+                    clearSelection();
+                    const startCell = cell;
+                    startCell.classList.add('bg-blue-300', 'scale-105', 'border-blue-700');
+                    selectedCells.push(startCell);
+                }
+            });
+
+            grid.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (isSelecting) {
+                    const touch = e.touches[0];
+                    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const cell = element?.closest('.bg-white');
+
+                    if (cell && !selectedCells.includes(cell)) {
+                        const lastCell = selectedCells[selectedCells.length - 1];
+                        const start = {row: parseInt(selectedCells[0].dataset.row), col: parseInt(selectedCells[0].dataset.col)};
+                        const current = {row: parseInt(cell.dataset.row), col: parseInt(cell.dataset.col)};
+                        const last = {row: parseInt(lastCell.dataset.row), col: parseInt(lastCell.dataset.col)};
+                        
+                        const dr = Math.sign(current.row - start.row);
+                        const dc = Math.sign(current.col - start.col);
+
+                        if (selectedCells.length > 1) {
+                            const drLast = Math.sign(last.row - start.row);
+                            const dcLast = Math.sign(last.col - start.col);
+                            if (dr !== drLast || dc !== dcLast) return;
+                        }
+
+                        if ((dr === 0 && dc !== 0) || (dr !== 0 && dc === 0) || (Math.abs(dr) === 1 && Math.abs(dc) === 1)) {
+                            cell.classList.add('bg-blue-300', 'scale-105', 'border-blue-700');
+                            selectedCells.push(cell);
+                        }
+                    }
+                }
+            });
+
+            grid.addEventListener('touchend', () => {
+                isSelecting = false;
+                checkSelection();
+            });
+
+            // Botão de novo jogo principal
+            newGameBtn.addEventListener('click', () => {
+                initializeGame();
+            });
+
+            // Botão de jogar novamente no modal de vitória
+            playAgainBtn.addEventListener('click', () => {
+                initializeGame();
+            });
+            
+            // Evento para o novo botão de "Começar"
+            startGameBtn.addEventListener('click', () => {
+                homeScreen.classList.add('hidden');
+                gameScreen.classList.remove('hidden');
+                initializeGame();
+            });
+        });
+    </script>
+</body>
+</html>
